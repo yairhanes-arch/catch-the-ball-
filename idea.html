@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<title>Circle Rush</title>
+<style>
+body {
+    margin: 0;
+    height: 100vh;
+    background: radial-gradient(circle at top, #1b1f3b, #05060f);
+    font-family: Arial;
+    color: white;
+    overflow: hidden;
+}
+
+/* HUD */
+#hud {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.card {
+    background: rgba(255,255,255,0.08);
+    padding: 12px 18px;
+    border-radius: 14px;
+    min-width: 160px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.4);
+}
+
+.card span {
+    font-size: 22px;
+    font-weight: bold;
+}
+
+/* Circle */
+.circle {
+    position: absolute;
+    border-radius: 50%;
+    cursor: pointer;
+    animation: pop 0.15s ease-out;
+}
+
+.normal {
+    background: radial-gradient(circle at top left, #00ffd5, #0077ff);
+    box-shadow: 0 0 25px rgba(0,200,255,0.9);
+}
+
+.bonus {
+    background: radial-gradient(circle at top left, #ffd700, #ff8c00);
+    box-shadow: 0 0 30px rgba(255,200,0,1);
+}
+
+@keyframes pop {
+    from { transform: scale(0.6); }
+    to { transform: scale(1); }
+}
+
+/* Center screen */
+#screen {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#panel {
+    background: rgba(255,255,255,0.08);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    width: 320px;
+}
+
+/* Buttons */
+button {
+    margin-top: 25px;
+    width: 100%;
+    padding: 16px;
+    font-size: 18px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    background: linear-gradient(90deg, #00ffd5, #0077ff);
+    color: #000;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 20px rgba(0,200,255,0.7);
+}
+
+/* Leaderboard side button קטן */
+#lbButton {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    padding: 10px 14px;
+    font-size: 16px;
+    border-radius: 8px 0 0 8px;
+    cursor: pointer;
+    background: linear-gradient(90deg,#ffd700,#ff9900);
+    color: #000;
+    font-weight: bold;
+    box-shadow: -2px 2px 8px rgba(0,0,0,0.4);
+    z-index: 1000;
+    width: auto;
+}
+
+/* Leaderboard overlay */
+#leaderboardOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    z-index: 999;
+}
+
+#leaderboardOverlay h2 {
+    margin-bottom: 20px;
+    font-size: 28px;
+    text-shadow: 1px 1px 6px #000;
+}
+
+/* Leaderboard list */
+#leaderboardContent {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    width: 300px;
+}
+
+.leaderCard {
+    background: rgba(255,255,255,0.1);
+    padding: 12px 16px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    transition: transform 0.2s;
+}
+
+.leaderCard:hover {
+    transform: scale(1.03);
+}
+
+#leaderboardOverlay button {
+    width: auto;
+    margin-top: 20px;
+    padding: 10px 20px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="hud">
+    <div class="card">ניקוד<br><span id="score">0</span></div>
+    <div class="card">קומבו<br><span id="combo">0</span></div>
+    <div class="card">זמן<br><span id="time">30</span></div>
+</div>
+
+<div id="screen">
+    <div id="panel">
+        <h1>Circle Rush</h1>
+        <p>לחץ כמה שיותר מהר<br>אל תפספס</p>
+        <button onclick="startGame()">התחל משחק</button>
+    </div>
+</div>
+
+<button id="lbButton" onclick="toggleLeaderboard()">שיאים</button>
+
+<div id="leaderboardOverlay">
+    <h2>לוח שיאים עולמי</h2>
+    <div id="leaderboardContent"></div>
+    <button onclick="toggleLeaderboard()">סגור</button>
+</div>
+
+<script>
+let score = 0;
+let combo = 0;
+let timeLeft = 30;
+let size = 80;
+let speed = 900;
+let gameInterval, timer;
+let currentCircle;
+
+const lbKey = "circleRushGlobal";
+
+function startGame() {
+    document.getElementById("screen").style.display = "none";
+    spawnCircle();
+    gameInterval = setInterval(spawnCircle, speed);
+    timer = setInterval(updateTime, 1000);
+}
+
+function spawnCircle() {
+    if (currentCircle) currentCircle.remove();
+
+    const circle = document.createElement("div");
+    const isBonus = Math.random() < 0.15;
+
+    circle.className = "circle " + (isBonus ? "bonus" : "normal");
+    const s = isBonus ? 60 : size;
+
+    circle.style.width = s + "px";
+    circle.style.height = s + "px";
+    circle.style.left = Math.random() * (window.innerWidth - s) + "px";
+    circle.style.top = Math.random() * (window.innerHeight - s) + "px";
+
+    circle.onclick = () => {
+        if (isBonus) {
+            score += 10;
+            combo += 2;
+        } else {
+            score += 1 + combo;
+            combo++;
+        }
+
+        updateHUD();
+
+        if (size > 35) size -= 3;
+        if (speed > 300) speed -= 40;
+
+        clearInterval(gameInterval);
+        gameInterval = setInterval(spawnCircle, speed);
+
+        spawnCircle();
+    };
+
+    document.body.appendChild(circle);
+    currentCircle = circle;
+
+    setTimeout(() => {
+        if (currentCircle === circle) {
+            combo = 0;
+            updateHUD();
+            circle.remove();
+        }
+    }, speed);
+}
+
+function updateTime() {
+    timeLeft--;
+    updateHUD();
+    if (timeLeft <= 0) endGame();
+}
+
+function updateHUD() {
+    scoreEl.textContent = score;
+    comboEl.textContent = combo;
+    timeEl.textContent = timeLeft;
+}
+
+const scoreEl = document.getElementById("score");
+const comboEl = document.getElementById("combo");
+const timeEl = document.getElementById("time");
+
+function endGame() {
+    clearInterval(gameInterval);
+    clearInterval(timer);
+    if (currentCircle) currentCircle.remove();
+
+    const scores = JSON.parse(localStorage.getItem(lbKey)) || [];
+    let lowestHigh = scores.length < 5 ? 0 : scores[scores.length-1].score;
+
+    if(score > lowestHigh) {
+        const name = prompt("שברת שיא! כתוב את השם שלך:");
+        scores.push({name: name || "שחקן", score});
+        scores.sort((a,b) => b.score - a.score);
+        if(scores.length > 5) scores.pop();
+        localStorage.setItem(lbKey, JSON.stringify(scores));
+    }
+
+    document.getElementById("screen").style.display = "flex";
+    document.getElementById("panel").innerHTML = `
+        <h2>נגמר המשחק </h2>
+        <p>ניקוד: <b>${score}</b></p>
+        <button onclick="location.reload()">שחק שוב</button>
+    `;
+}
+
+function toggleLeaderboard() {
+    const overlay = document.getElementById("leaderboardOverlay");
+    const content = document.getElementById("leaderboardContent");
+    if(overlay.style.display === "flex") {
+        overlay.style.display = "none";
+    } else {
+        overlay.style.display = "flex";
+        const scores = JSON.parse(localStorage.getItem(lbKey)) || [];
+        if(scores.length === 0){
+            content.innerHTML = "<p>אין שיאים עדיין</p>";
+        } else {
+            content.innerHTML = scores.map((s,i)=>
+                `<div class="leaderCard"><span>${i+1}. ${s.name}</span><span>${s.score}</span></div>`
+            ).join("");
+        }
+    }
+}
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
